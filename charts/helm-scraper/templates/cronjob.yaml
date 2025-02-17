@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: helm-release-scraper
+  namespace: default
+spec:
+  schedule: "{{ .Values.cronjob.schedule }}"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ .Values.serviceAccount.name }}
+          restartPolicy: {{ .Values.cronjob.restartPolicy }}
+          containers:
+            - name: helm-scraper
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+              env:
+                - name: CLUSTER_NAME
+                  value: "{{ .Values.cluster.name }}"
+                - name: API_URL
+                  value: "{{ .Values.api.url }}"
+                - name: API_TOKEN
+                  value: "{{ .Values.api.token }}"

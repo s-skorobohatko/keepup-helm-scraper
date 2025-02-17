@@ -1,0 +1,21 @@
+image:
+  repository: "192.168.1.148:5000/helm-scraper"
+  tag: "latest"
+  pullPolicy: Always
+
+cronjob:
+  schedule: "*/5 * * * *"
+  restartPolicy: Never
+
+serviceAccount:
+  name: scraper-sa
+
+rbac:
+  create: true
+
+api:
+  url: "http://10.101.45.144:9101/helm-cluster"
+  token: "secret"
+
+cluster:
+  name: "minikube"
