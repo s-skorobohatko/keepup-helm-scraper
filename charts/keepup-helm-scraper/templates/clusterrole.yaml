@@ -1,8 +1,10 @@
+{{- if .Values.rbac.create }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: scraper-role
+  name: {{ .Release.Name }}
 rules:
   - apiGroups: [""]
     resources: ["namespaces", "secrets"]
     verbs: ["get", "list"]
+{{- end }}

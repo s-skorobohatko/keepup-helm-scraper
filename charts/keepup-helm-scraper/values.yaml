@@ -1,0 +1,16 @@
+image:
+  repository: "ghcr.io/code-tool/keepup-helm-scraper"
+  tag: ""
+  pullPolicy: IfNotPresent
+
+cronjob:
+  schedule: "0 */12 * * *"
+  restartPolicy: Never
+
+rbac:
+  create: true
+
+env:
+  CLUSTER_NAME: ''
+  API_URL: ''
+  API_TOKEN: ''
