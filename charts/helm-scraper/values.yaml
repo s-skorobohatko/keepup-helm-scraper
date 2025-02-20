@@ -4,7 +4,7 @@ image:
   pullPolicy: Always
 
 cronjob:
-  schedule: "*/5 * * * *"
+  schedule: "0 */12 * * *"
   restartPolicy: Never
 
 serviceAccount:

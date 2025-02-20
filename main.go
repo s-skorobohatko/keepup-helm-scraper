@@ -160,15 +160,6 @@ func getClusterName(clientset *kubernetes.Clientset) string {
 		return envClusterName
 	}
 
-	configMap, err := clientset.CoreV1().ConfigMaps("kube-system").Get(context.TODO(), "kubeadm-config", metav1.GetOptions{})
-	if err == nil {
-		clusterName, ok := configMap.Data["ClusterConfiguration"]
-		if ok {
-			log.Printf("Using cluster name from kubeadm-config: %s", clusterName)
-			return clusterName
-		}
-	}
-
 	log.Println("Cluster name not found, using default 'minikube'")
 	return "minikube"
 }

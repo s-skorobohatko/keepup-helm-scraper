@@ -8,7 +8,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o helm-scraper main.go
 FROM alpine:latest
 WORKDIR /root/
 
-ENV CLUSTER_NAME="minikube"
+#ENV CLUSTER_NAME="minikube"
 COPY --from=builder /app/helm-scraper /root/helm-scraper
 RUN chmod +x /root/helm-scraper
 
