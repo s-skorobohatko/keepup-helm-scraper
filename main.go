@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -24,6 +25,7 @@ type HelmChartInfo struct {
 }
 
 type ClusterInfo struct {
+	ClusterID   string          `json:"cluster_id"`
 	ClusterName string          `json:"cluster_name"`
 	KubeVersion string          `json:"kube_version"`
 	HelmCharts  []HelmChartInfo `json:"helm_charts"`
@@ -42,7 +44,6 @@ type HelmRelease struct {
 }
 
 func main() {
-
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		log.Fatalf("Failed to create cluster config: %v", err)
@@ -55,10 +56,19 @@ func main() {
 
 	clusterName := getClusterName()
 	kubeVersion := getKubernetesVersion(clientset)
+	clusterID := generateClusterID(clusterName)
+
+	log.Printf("Cluster ID: %s", clusterID)
+	log.Printf("Cluster Name: %s", clusterName)
+	log.Printf("Kubernetes Version: %s", kubeVersion)
 
 	helmCharts := getLatestHelmReleases(clientset)
+	argocdCharts := getArgoCDHelmReleases(clientset)
+
+	helmCharts = append(helmCharts, argocdCharts...)
 
 	output := ClusterInfo{
+		ClusterID:   clusterID,
 		ClusterName: clusterName,
 		KubeVersion: kubeVersion,
 		HelmCharts:  helmCharts,
@@ -134,6 +144,41 @@ func getLatestHelmReleases(clientset *kubernetes.Clientset) []HelmChartInfo {
 
 	return helmCharts
 }
+
+func getArgoCDHelmReleases(clientset *kubernetes.Clientset) []HelmChartInfo {
+	var helmCharts []HelmChartInfo
+
+	//label "argocd.argoproj.io/instance"
+	deployments, err := clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{
+		LabelSelector: "argocd.argoproj.io/instance",
+	})
+	if err != nil {
+		log.Printf("Failed to get ArgoCD-managed deployments: %v", err)
+		return helmCharts
+	}
+
+	for _, deploy := range deployments.Items {
+		deploymentName := deploy.Name
+		namespace := deploy.Namespace
+		version := "unknown"
+
+		for key, value := range deploy.Labels {
+			if strings.Contains(strings.ToLower(key), "chart") {
+				version = value
+				break
+			}
+		}
+
+		helmCharts = append(helmCharts, HelmChartInfo{
+			ChartName: deploymentName,
+			Version:   version,
+			Namespace: namespace,
+		})
+	}
+
+	return helmCharts
+}
+
 func sendDataToAPI(jsonData []byte) {
 	apiURL := os.Getenv("API_URL")
 	apiToken := os.Getenv("API_TOKEN")
@@ -167,20 +212,21 @@ func sendDataToAPI(jsonData []byte) {
 	}
 }
 
+func generateClusterID(clusterName string) string {
+	namespaceUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte(clusterName))
+	return namespaceUUID.String()
+}
+
 func getClusterName() string {
 	if envClusterName := os.Getenv("CLUSTER_NAME"); envClusterName != "" {
-		log.Printf("Using cluster name from environment: %s", envClusterName)
 		return envClusterName
 	}
-
-	log.Println("Cluster name not found, using default 'minikube'")
-	return "minikube"
+	return "unknown-cluster"
 }
 
 func getKubernetesVersion(clientset *kubernetes.Clientset) string {
 	versionInfo, err := clientset.Discovery().ServerVersion()
 	if err != nil {
-		log.Println("Failed to fetch Kubernetes version, using 'unknown-version'")
 		return "unknown-version"
 	}
 	return versionInfo.GitVersion
