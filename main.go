@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -35,6 +36,9 @@ type HelmRelease struct {
 			Version string `json:"version"`
 		} `json:"metadata"`
 	} `json:"chart"`
+	Info struct {
+		Status string `json:"status"`
+	} `json:"info"`
 }
 
 func main() {
@@ -49,9 +53,26 @@ func main() {
 		log.Fatalf("Failed to create clientset: %v", err)
 	}
 
-	clusterName := getClusterName(clientset)
+	clusterName := getClusterName()
 	kubeVersion := getKubernetesVersion(clientset)
 
+	helmCharts := getLatestHelmReleases(clientset)
+
+	output := ClusterInfo{
+		ClusterName: clusterName,
+		KubeVersion: kubeVersion,
+		HelmCharts:  helmCharts,
+	}
+
+	jsonData, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to convert to JSON: %v", err)
+	}
+
+	sendDataToAPI(jsonData)
+}
+
+func getLatestHelmReleases(clientset *kubernetes.Clientset) []HelmChartInfo {
 	var helmCharts []HelmChartInfo
 
 	namespaces, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
@@ -99,6 +120,10 @@ func main() {
 				continue
 			}
 
+			if strings.ToLower(helmRelease.Info.Status) != "deployed" {
+				continue
+			}
+
 			helmCharts = append(helmCharts, HelmChartInfo{
 				ChartName: helmRelease.Chart.Metadata.Name,
 				Version:   helmRelease.Chart.Metadata.Version,
@@ -107,20 +132,8 @@ func main() {
 		}
 	}
 
-	output := ClusterInfo{
-		ClusterName: clusterName,
-		KubeVersion: kubeVersion,
-		HelmCharts:  helmCharts,
-	}
-
-	jsonData, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		log.Fatalf("Failed to convert to JSON: %v", err)
-	}
-
-	sendDataToAPI(jsonData)
+	return helmCharts
 }
-
 func sendDataToAPI(jsonData []byte) {
 	apiURL := os.Getenv("API_URL")
 	apiToken := os.Getenv("API_TOKEN")
@@ -154,7 +167,7 @@ func sendDataToAPI(jsonData []byte) {
 	}
 }
 
-func getClusterName(clientset *kubernetes.Clientset) string {
+func getClusterName() string {
 	if envClusterName := os.Getenv("CLUSTER_NAME"); envClusterName != "" {
 		log.Printf("Using cluster name from environment: %s", envClusterName)
 		return envClusterName
